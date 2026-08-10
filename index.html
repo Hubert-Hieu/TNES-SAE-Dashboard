@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>TNES SAE Dashboard</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f5f6f8;
+      color: #222;
+    }
+
+    .header {
+      background: #1f2937;
+      color: white;
+      padding: 20px 30px;
+    }
+
+    .header h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .header p {
+      margin: 6px 0 0;
+      color: #d1d5db;
+    }
+
+    .container {
+      padding: 25px 30px;
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 15px;
+      margin-bottom: 25px;
+    }
+
+    .card {
+      background: white;
+      border-radius: 10px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .card-title {
+      color: #6b7280;
+      font-size: 14px;
+    }
+
+    .card-value {
+      font-size: 30px;
+      font-weight: bold;
+      margin-top: 8px;
+    }
+
+    .toolbar {
+      background: white;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      width: 300px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .table-container {
+      background: white;
+      border-radius: 10px;
+      overflow: auto;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 1200px;
+    }
+
+    th {
+      background: #e5e7eb;
+      padding: 12px;
+      text-align: left;
+      font-size: 13px;
+      position: sticky;
+      top: 0;
+    }
+
+    td {
+      padding: 11px 12px;
+      border-bottom: 1px solid #eee;
+      font-size: 13px;
+    }
+
+    tr:hover {
+      background: #f9fafb;
+    }
+
+    .status {
+      padding: 5px 9px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      font-size: 16px;
+    }
+
+    .error {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <div class="header">
+    <h1>TNES SAE Dashboard</h1>
+    <p>SAE Project Summary & Schedule</p>
+  </div>
+
+  <div class="container">
+
+    <div id="error" class="error"></div>
+
+    <!-- Summary cards -->
+    <div class="cards">
+
+      <div class="card">
+        <div class="card-title">Total Machines</div>
+        <div id="totalMachines" class="card-value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Dispatched</div>
+        <div id="dispatched" class="card-value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Pending</div>
+        <div id="pending" class="card-value">-</div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Data Status</div>
+        <div id="dataStatus" class="card-value">Loading</div>
+      </div>
+
+    </div>
+
+    <!-- Search -->
+    <div class="toolbar">
+      <input
+        id="searchInput"
+        type="text"
+        placeholder="Search machine, project, spec..."
+        oninput="filterData()"
+      >
+
+      <button onclick="loadData()">
+        Refresh
+      </button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-container">
+
+      <div id="loading" class="loading">
+        Loading SAE data...
+      </div>
+
+      <table id="dataTable" style="display:none;">
+
+        <thead>
+          <tr>
+            <th>S.No</th>
+            <th>Project</th>
+            <th>Build</th>
+            <th>Machine / Equipment</th>
+            <th>Spec</th>
+            <th>Category</th>
+            <th>KO Date</th>
+            <th>NBD</th>
+            <th>Vendor</th>
+            <th>BFIH Site Arrive</th>
+            <th>Dispatch to Customer</th>
+            <th>Dispatch Status</th>
+          </tr>
+        </thead>
+
+        <tbody id="tableBody">
+        </tbody>
+
+      </table>
+
+    </div>
+
+  </div>
+
+
+<script>
+
+  // ============================================================
+  // 1. GOOGLE APPS SCRIPT API
+  // ============================================================
+
+  const API_URL = "https://script.google.com/a/macros/fih-foxconn.com/s/AKfycbz3NIy7sWf7A57cU2nnAnHmGkJiYN5zYYT2e_T3v40Bg3Iu8-GCbsXjvoHoubbQJami/exec";
+
+
+  // ============================================================
+  // 2. GLOBAL DATA
+  // ============================================================
+
+  let allData = [];
+
+
+  // ============================================================
+  // 3. LOAD DATA FROM GOOGLE SHEET API
+  // ============================================================
+
+  async function loadData() {
+
+    const loading = document.getElementById("loading");
+    const table = document.getElementById("dataTable");
+    const errorBox = document.getElementById("error");
+
+    loading.style.display = "block";
+    table.style.display = "none";
+    errorBox.style.display = "none";
+
+    try {
+
+      const response = await fetch(API_URL);
+
+      if (!response.ok) {
+        throw new Error("API connection failed");
+      }
+
+      const result = await response.json();
+
+      console.log("API Result:", result);
+
+      if (!result.success) {
+        throw new Error(result.message || "API returned an error");
+      }
+
+      allData = result.data || [];
+
+      updateSummary();
+
+      displayData(allData);
+
+      loading.style.display = "none";
+      table.style.display = "table";
+
+      document.getElementById("dataStatus").textContent = "OK";
+
+    } catch (error) {
+
+      console.error(error);
+
+      loading.style.display = "none";
+
+      errorBox.style.display = "block";
+
+      errorBox.textContent =
+        "Unable to load SAE data: " + error.message;
+
+      document.getElementById("dataStatus").textContent = "Error";
+
+    }
+  }
+
+
+  // ============================================================
+  // 4. UPDATE SUMMARY CARDS
+  // ============================================================
+
+  function updateSummary() {
+
+    const total = allData.length;
+
+    let dispatched = 0;
+
+    allData.forEach(item => {
+
+      const status =
+        String(item["Dispatch status"] || "").toLowerCase();
+
+      if (status.includes("dispatch")) {
+        dispatched++;
+      }
+
+    });
+
+    const pending = total - dispatched;
+
+    document.getElementById("totalMachines").textContent = total;
+
+    document.getElementById("dispatched").textContent = dispatched;
+
+    document.getElementById("pending").textContent = pending;
+  }
+
+
+  // ============================================================
+  // 5. DISPLAY DATA
+  // ============================================================
+
+  function displayData(data) {
+
+    const tbody = document.getElementById("tableBody");
+
+    tbody.innerHTML = "";
+
+    data.forEach(item => {
+
+      const row = document.createElement("tr");
+
+      row.innerHTML = `
+
+        <td>${safe(item["S.No"])}</td>
+
+        <td>${safe(item["Project"])}</td>
+
+        <td>${safe(item["Build"])}</td>
+
+        <td>${safe(item["Machine/Equipment name"])}</td>
+
+        <td>${safe(item["Spec"])}</td>
+
+        <td>${safe(item["Category"])}</td>
+
+        <td>${formatDate(item["KO Date"])}</td>
+
+        <td>${formatDate(item["NBD"])}</td>
+
+        <td>${safe(item["Vendor"])}</td>
+
+        <td>${formatDate(item["BFIH site arrive"])}</td>
+
+        <td>${formatDate(item["Dispatch to Customer"])}</td>
+
+        <td>${safe(item["Dispatch status"])}</td>
+
+      `;
+
+      tbody.appendChild(row);
+
+    });
+  }
+
+
+  // ============================================================
+  // 6. SEARCH
+  // ============================================================
+
+  function filterData() {
+
+    const keyword =
+      document
+        .getElementById("searchInput")
+        .value
+        .toLowerCase();
+
+    const filtered = allData.filter(item => {
+
+      const text = Object.values(item)
+        .join(" ")
+        .toLowerCase();
+
+      return text.includes(keyword);
+
+    });
+
+    displayData(filtered);
+  }
+
+
+  // ============================================================
+  // 7. DATE FORMAT
+  // ============================================================
+
+  function formatDate(value) {
+
+    if (!value) return "";
+
+    return String(value)
+      .replace("T00:00:00.000Z", "")
+      .replace("T18:30:00.000Z", "");
+  }
+
+
+  // ============================================================
+  // 8. SAFE DISPLAY
+  // ============================================================
+
+  function safe(value) {
+
+    if (value === null || value === undefined) {
+      return "";
+    }
+
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+
+  // ============================================================
+  // 9. START
+  // ============================================================
+
+  loadData();
+
+</script>
+
+</body>
+</html>
